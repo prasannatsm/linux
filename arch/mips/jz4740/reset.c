@@ -12,15 +12,11 @@
  *
  */
 
-#include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/pm.h>
 
 #include <asm/reboot.h>
-
-#include <asm/mach-jz4740/base.h>
-#include <asm/mach-jz4740/timer.h>
 
 #include "reset.h"
 #include "clock.h"
@@ -36,16 +32,21 @@ static void jz4740_halt(void)
 	}
 }
 
-#define JZ_REG_WDT_DATA 0x00
-#define JZ_REG_WDT_COUNTER_ENABLE 0x04
-#define JZ_REG_WDT_COUNTER 0x08
-#define JZ_REG_WDT_CTRL 0x0c
+#define JZ4740_WDT_BASE_ADDR		0x10002000
+#define JZ_REG_WDT_DATA			0x00
+#define JZ_REG_WDT_COUNTER_ENABLE	0x04
+#define JZ_REG_WDT_COUNTER		0x08
+#define JZ_REG_WDT_CTRL			0x0c
+
+#define JZ4740_TCU_BASE_ADDR		0x10002010
+#define JZ_REG_TIMER_STOP_CLEAR		0x2C
 
 static void jz4740_restart(char *command)
 {
 	void __iomem *wdt_base = ioremap(JZ4740_WDT_BASE_ADDR, 0x0f);
+	void __iomem *tcu_base = ioremap(JZ4740_TCU_BASE_ADDR, 0x2f);
 
-	jz4740_timer_enable_watchdog();
+	writel(BIT(16), tcu_base + JZ_REG_TIMER_STOP_CLEAR);
 
 	writeb(0, wdt_base + JZ_REG_WDT_COUNTER_ENABLE);
 

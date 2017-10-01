@@ -4,8 +4,11 @@
 
 # Object file lists.
 
-obj-y += prom.o time.o reset.o setup.o \
-	platform.o timer.o
+obj-y += prom.o
+obj-y += time.o
+obj-y += reset.o
+obj-y += setup.o
+obj-y += platform.o
 
 CFLAGS_setup.o = -I$(src)/../../../scripts/dtc/libfdt
 

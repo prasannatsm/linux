@@ -44,6 +44,43 @@
 		#clock-cells = <1>;
 	};
 
+	watchdog: jz4780-watchdog@10002000 {
+		compatible = "ingenic,jz4740-watchdog";
+		reg = <0x10002000 0x100 0x1000202C 0x4 0x1000203C 0x4>;
+	};
+
+	tcu: tcu {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		reg = <0x10002010 0x100>;
+		ranges;
+
+		timer: jz4740-timer@0 {
+			compatible = "ingenic,jz4740-timer";
+			reg = <0x10002010 0x100>;
+
+			interrupt-parent = <&intc>;
+			interrupts = <25>;
+
+			clocks = <&ext>;
+			clock-names = "ext";
+
+			#clock-cells = <1>;
+		};
+
+		pwm: jz4740-pwm@0 {
+			compatible = "jz4740-pwm";
+			reg = <0x10002010 0x100>;
+
+			clocks = <&ext>;
+			clock-names = "ext";
+
+			#clock-cells = <1>;
+		};
+	};
+
 	rtc_dev: rtc@10003000 {
 		compatible = "ingenic,jz4780-rtc";
 		reg = <0x10003000 0x4c>;

@@ -72,6 +72,13 @@ config FTTMR010_TIMER
 	  Enables support for the Faraday Technology timer block
 	  FTTMR010.
 
+config JZ4740_TIMER
+	bool "JZ4740 timer driver"
+	select TIMER_OF
+	select MFD_SYSCON
+	help
+	  Enables the support Ingenic JZ4740/JZ4780 timer driver.
+
 config ROCKCHIP_TIMER
 	bool "Rockchip timer driver" if COMPILE_TEST
 	depends on ARM || ARM64
