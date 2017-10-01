@@ -26,6 +26,7 @@
 #define NUM_PWM 8
 
 struct jz4740_pwm_chip {
+	void __iomem *base;
 	struct pwm_chip chip;
 	struct clk *clk;
 };
@@ -37,6 +38,8 @@ static inline struct jz4740_pwm_chip *to_jz4740(struct pwm_chip *chip)
 
 static int jz4740_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm)
 {
+	struct jz4740_pwm_chip *jz4740 = to_jz4740(pwm->chip);
+
 	/*
 	 * Timers 0 and 1 are used for system tasks, so they are unavailable
 	 * for use as PWMs.
@@ -44,36 +47,40 @@ static int jz4740_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm)
 	if (pwm->hwpwm < 2)
 		return -EBUSY;
 
-	jz4740_timer_start(pwm->hwpwm);
+	writel(BIT(pwm->hwpwm), jz4740->base + JZ_REG_TIMER_STOP_CLEAR);
 
 	return 0;
 }
 
+#define JZ_REG_TIMER_CTRL(x) (((x) * 0x10) + 0x3C)
 static void jz4740_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-	jz4740_timer_set_ctrl(pwm->hwpwm, 0);
+	struct jz4740_pwm_chip *jz4740 = to_jz4740(pwm->chip);
 
-	jz4740_timer_stop(pwm->hwpwm);
+	writew(0, jz4740->base + JZ_REG_TIMER_CTRL(pwm->hwpwm));
+	writel(BIT(pwm->hwpwm), jz4740->base + JZ_REG_TIMER_STOP_SET);
 }
 
 static int jz4740_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-	uint32_t ctrl = jz4740_timer_get_ctrl(pwm->pwm);
+	struct jz4740_pwm_chip *jz4740 = to_jz4740(pwm->chip);
+	uint32_t ctrl = readw(jz4740->base + JZ_REG_TIMER_CTRL(pwm->pwm));
 
 	ctrl |= JZ_TIMER_CTRL_PWM_ENABLE;
-	jz4740_timer_set_ctrl(pwm->hwpwm, ctrl);
-	jz4740_timer_enable(pwm->hwpwm);
+	writew(ctrl, jz4740->base + JZ_REG_TIMER_CTRL(pwm->hwpwm));
+	writeb(BIT(pwm->hwpwm), jz4740->base + JZ_REG_TIMER_ENABLE_SET);
 
 	return 0;
 }
 
 static void jz4740_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-	uint32_t ctrl = jz4740_timer_get_ctrl(pwm->hwpwm);
+	struct jz4740_pwm_chip *jz4740 = to_jz4740(pwm->chip);
+	uint32_t ctrl = readw(jz4740->base + JZ_REG_TIMER_CTRL(pwm->pwm));
 
 	ctrl &= ~JZ_TIMER_CTRL_PWM_ENABLE;
-	jz4740_timer_disable(pwm->hwpwm);
-	jz4740_timer_set_ctrl(pwm->hwpwm, ctrl);
+	writeb(BIT(pwm->hwpwm), jz4740->base + JZ_REG_TIMER_ENABLE_CLEAR);
+	writew(ctrl, jz4740->base + JZ_REG_TIMER_CTRL(pwm->hwpwm));
 }
 
 static int jz4740_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
@@ -105,18 +112,18 @@ static int jz4740_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	if (duty >= period)
 		duty = period - 1;
 
-	is_enabled = jz4740_timer_is_enabled(pwm->hwpwm);
+	is_enabled = readb(jz4740->base + JZ_REG_TIMER_ENABLE) & BIT(pwm->hwpwm);
 	if (is_enabled)
 		jz4740_pwm_disable(chip, pwm);
 
-	jz4740_timer_set_count(pwm->hwpwm, 0);
-	jz4740_timer_set_duty(pwm->hwpwm, duty);
-	jz4740_timer_set_period(pwm->hwpwm, period);
+	writew(0, jz4740->base + JZ_REG_TIMER_CNT(pwm->hwpwm));
+	writew(duty, jz4740->base + JZ_REG_TIMER_DHR(pwm->hwpwm));
+	writew(period, jz4740->base + JZ_REG_TIMER_DFR(pwm->hwpwm));
 
 	ctrl = JZ_TIMER_CTRL_PRESCALER(prescaler) | JZ_TIMER_CTRL_SRC_EXT |
 		JZ_TIMER_CTRL_PWM_ABBRUPT_SHUTDOWN;
 
-	jz4740_timer_set_ctrl(pwm->hwpwm, ctrl);
+	writew(ctrl, jz4740->base + JZ_REG_TIMER_CTRL(pwm->hwpwm));
 
 	if (is_enabled)
 		jz4740_pwm_enable(chip, pwm);
@@ -136,6 +143,7 @@ static const struct pwm_ops jz4740_pwm_ops = {
 static int jz4740_pwm_probe(struct platform_device *pdev)
 {
 	struct jz4740_pwm_chip *jz4740;
+	struct resource *mem;
 
 	jz4740 = devm_kzalloc(&pdev->dev, sizeof(*jz4740), GFP_KERNEL);
 	if (!jz4740)
@@ -144,6 +152,11 @@ static int jz4740_pwm_probe(struct platform_device *pdev)
 	jz4740->clk = devm_clk_get(&pdev->dev, "ext");
 	if (IS_ERR(jz4740->clk))
 		return PTR_ERR(jz4740->clk);
+
+	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	jz4740->base = devm_ioremap_resource(&pdev->dev, mem);
+	if (IS_ERR(jz4740->base))
+		return PTR_ERR(jz4740->base);
 
 	jz4740->chip.dev = &pdev->dev;
 	jz4740->chip.ops = &jz4740_pwm_ops;
@@ -162,9 +175,16 @@ static int jz4740_pwm_remove(struct platform_device *pdev)
 	return pwmchip_remove(&jz4740->chip);
 }
 
+static const struct of_device_id jz4740_pwm_of_match[] = {
+	{ .compatible = "ingenic,jz4740-pwm" },
+	{},
+};
+MODULE_DEVICE_TABLE(of, jz4740_pwm_of_match);
+
 static struct platform_driver jz4740_pwm_driver = {
 	.driver = {
 		.name = "jz4740-pwm",
+		.of_match_table = of_match_ptr(jz4740_pwm_of_match),
 	},
 	.probe = jz4740_pwm_probe,
 	.remove = jz4740_pwm_remove,
