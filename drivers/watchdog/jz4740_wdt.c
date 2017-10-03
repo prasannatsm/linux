@@ -181,21 +181,21 @@ static int jz4740_wdt_probe(struct platform_device *pdev)
 	watchdog_set_drvdata(jz4740_wdt, drvdata);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	drvdata->base = devm_ioremap_resource(&pdev->dev, res);
+	drvdata->base = devm_ioremap(&pdev->dev, res->start, resource_size(res));
 	if (IS_ERR(drvdata->base)) {
 		ret = PTR_ERR(drvdata->base);
 		goto err_out;
 	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	drvdata->reg_stop_set = devm_ioremap_resource(&pdev->dev, res);
+	drvdata->reg_stop_set = devm_ioremap(&pdev->dev, res->start, resource_size(res));
 	if (IS_ERR(drvdata->reg_stop_set)) {
 		ret = PTR_ERR(drvdata->reg_stop_set);
 		goto err_out;
 	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
-	drvdata->reg_stop_clear = devm_ioremap_resource(&pdev->dev, res);
+	drvdata->reg_stop_clear = devm_ioremap(&pdev->dev, res->start, resource_size(res));
 	if (IS_ERR(drvdata->reg_stop_clear)) {
 		ret = PTR_ERR(drvdata->reg_stop_clear);
 		goto err_out;
