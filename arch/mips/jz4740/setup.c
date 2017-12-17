@@ -14,15 +14,19 @@
  *
  */
 
+#include <linux/clk-provider.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/irqchip.h>
 #include <linux/kernel.h>
 #include <linux/libfdt.h>
+#include <linux/of_address.h>
 #include <linux/of_fdt.h>
+#include <linux/of_irq.h>
 
 #include <asm/bootinfo.h>
 #include <asm/prom.h>
+#include <asm/time.h>
 
 #include <asm/mach-jz4740/base.h>
 
@@ -84,4 +88,11 @@ const char *get_system_type(void)
 void __init arch_init_irq(void)
 {
 	irqchip_init();
+}
+
+void __init plat_time_init(void)
+{
+	of_clk_init(NULL);
+
+	timer_probe();
 }
