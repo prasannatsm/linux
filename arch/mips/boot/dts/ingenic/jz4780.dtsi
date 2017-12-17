@@ -47,7 +47,7 @@
 
 	watchdog: jz4780-watchdog@10002000 {
 		compatible = "ingenic,jz4740-watchdog";
-		reg = <0x10002000 0x100 0x1000202C 0x4 0x1000203C 0x4>;
+		reg = <0x10002000 0x100>;
 	};
 
 	tcu: tcu {
