@@ -143,7 +143,7 @@ static const struct pwm_ops jz4740_pwm_ops = {
 static int jz4740_pwm_probe(struct platform_device *pdev)
 {
 	struct jz4740_pwm_chip *jz4740;
-	struct resource *mem;
+	struct resource *res;
 
 	jz4740 = devm_kzalloc(&pdev->dev, sizeof(*jz4740), GFP_KERNEL);
 	if (!jz4740)
@@ -153,8 +153,8 @@ static int jz4740_pwm_probe(struct platform_device *pdev)
 	if (IS_ERR(jz4740->clk))
 		return PTR_ERR(jz4740->clk);
 
-	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	jz4740->base = devm_ioremap_resource(&pdev->dev, mem);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	jz4740->base = ioremap(res->start, resource_size(res));
 	if (IS_ERR(jz4740->base))
 		return PTR_ERR(jz4740->base);
 
@@ -171,8 +171,12 @@ static int jz4740_pwm_probe(struct platform_device *pdev)
 static int jz4740_pwm_remove(struct platform_device *pdev)
 {
 	struct jz4740_pwm_chip *jz4740 = platform_get_drvdata(pdev);
+	int ret;
 
-	return pwmchip_remove(&jz4740->chip);
+	ret = pwmchip_remove(&jz4740->chip);
+	iounmap(jz4740->base);
+
+	return ret;
 }
 
 static const struct of_device_id jz4740_pwm_of_match[] = {
