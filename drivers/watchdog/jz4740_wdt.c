@@ -33,6 +33,9 @@
 #define JZ_REG_WDT_TIMER_COUNTER  0x8
 #define JZ_REG_WDT_TIMER_CONTROL  0xC
 
+#define JZ_REG_STOP_SET 0x2C
+#define JZ_REG_STOP_CLEAR 0x3C
+
 #define JZ_WDT_CLOCK_PCLK 0x1
 #define JZ_WDT_CLOCK_RTC  0x2
 #define JZ_WDT_CLOCK_EXT  0x4
@@ -65,8 +68,6 @@ MODULE_PARM_DESC(heartbeat,
 struct jz4740_wdt_drvdata {
 	struct watchdog_device wdt;
 	void __iomem *base;
-	void __iomem *reg_stop_set;
-	void __iomem *reg_stop_clear;
 	struct clk *rtc_clk;
 };
 
@@ -118,7 +119,7 @@ static int jz4740_wdt_start(struct watchdog_device *wdt_dev)
 {
 	struct jz4740_wdt_drvdata *drvdata = watchdog_get_drvdata(wdt_dev);
 
-	writel(BIT(16), drvdata->reg_stop_clear);
+	writel(BIT(16), drvdata->base + JZ_REG_STOP_CLEAR);
 	jz4740_wdt_set_timeout(wdt_dev, wdt_dev->timeout);
 
 	return 0;
@@ -128,10 +129,27 @@ static int jz4740_wdt_stop(struct watchdog_device *wdt_dev)
 {
 	struct jz4740_wdt_drvdata *drvdata = watchdog_get_drvdata(wdt_dev);
 
-	writel(BIT(16), drvdata->reg_stop_set);
+	writel(BIT(16), drvdata->base + JZ_REG_STOP_SET);
 	writeb(0x0, drvdata->base + JZ_REG_WDT_COUNTER_ENABLE);
 
 	return 0;
+}
+
+static int jz4740_wdt_restart(struct watchdog_device *wdt_dev,
+			      unsigned long action, void *data)
+{
+	struct jz4740_wdt_drvdata *drvdata = watchdog_get_drvdata(wdt_dev);
+
+	writel(BIT(16), drvdata->base + JZ_REG_STOP_CLEAR);
+
+	writeb(0, drvdata->base + JZ_REG_WDT_COUNTER_ENABLE);
+
+	writew(0, drvdata->base + JZ_REG_WDT_TIMER_COUNTER);
+	writew(0, drvdata->base + JZ_REG_WDT_TIMER_DATA);
+	writew(BIT(2), drvdata->base + JZ_REG_WDT_TIMER_CONTROL);
+
+	writeb(1, drvdata->base + JZ_REG_WDT_COUNTER_ENABLE);
+	_machine_halt();
 }
 
 static const struct watchdog_info jz4740_wdt_info = {
@@ -144,6 +162,7 @@ static const struct watchdog_ops jz4740_wdt_ops = {
 	.start = jz4740_wdt_start,
 	.stop = jz4740_wdt_stop,
 	.ping = jz4740_wdt_ping,
+	.restart = jz4740_wdt_restart,
 	.set_timeout = jz4740_wdt_set_timeout,
 };
 
@@ -181,23 +200,9 @@ static int jz4740_wdt_probe(struct platform_device *pdev)
 	watchdog_set_drvdata(jz4740_wdt, drvdata);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	drvdata->base = devm_ioremap(&pdev->dev, res->start, resource_size(res));
+	drvdata->base = ioremap(res->start, resource_size(res));
 	if (IS_ERR(drvdata->base)) {
 		ret = PTR_ERR(drvdata->base);
-		goto err_out;
-	}
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	drvdata->reg_stop_set = devm_ioremap(&pdev->dev, res->start, resource_size(res));
-	if (IS_ERR(drvdata->reg_stop_set)) {
-		ret = PTR_ERR(drvdata->reg_stop_set);
-		goto err_out;
-	}
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
-	drvdata->reg_stop_clear = devm_ioremap(&pdev->dev, res->start, resource_size(res));
-	if (IS_ERR(drvdata->reg_stop_clear)) {
-		ret = PTR_ERR(drvdata->reg_stop_clear);
 		goto err_out;
 	}
 
@@ -227,6 +232,7 @@ static int jz4740_wdt_remove(struct platform_device *pdev)
 
 	jz4740_wdt_stop(&drvdata->wdt);
 	watchdog_unregister_device(&drvdata->wdt);
+	iounmap(drvdata->base);
 	clk_put(drvdata->rtc_clk);
 
 	return 0;
