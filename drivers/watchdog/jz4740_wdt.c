@@ -138,18 +138,10 @@ static int jz4740_wdt_stop(struct watchdog_device *wdt_dev)
 static int jz4740_wdt_restart(struct watchdog_device *wdt_dev,
 			      unsigned long action, void *data)
 {
-	struct jz4740_wdt_drvdata *drvdata = watchdog_get_drvdata(wdt_dev);
+	wdt_dev->timeout = 0;
+	jz4740_wdt_start(wdt_dev);
 
-	writel(BIT(16), drvdata->base + JZ_REG_STOP_CLEAR);
-
-	writeb(0, drvdata->base + JZ_REG_WDT_COUNTER_ENABLE);
-
-	writew(0, drvdata->base + JZ_REG_WDT_TIMER_COUNTER);
-	writew(0, drvdata->base + JZ_REG_WDT_TIMER_DATA);
-	writew(BIT(2), drvdata->base + JZ_REG_WDT_TIMER_CONTROL);
-
-	writeb(1, drvdata->base + JZ_REG_WDT_COUNTER_ENABLE);
-	_machine_halt();
+	return 0;
 }
 
 static const struct watchdog_info jz4740_wdt_info = {
